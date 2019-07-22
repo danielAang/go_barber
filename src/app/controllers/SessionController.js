@@ -1,34 +1,40 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User";
+import authConfig from "../../config/auth";
 
 class SessionController {
   async store(req, res) {
     const { email, password } = req.body;
-    const user = User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
-    }
-    try {
-      if (!(await user.checkPassword(password))) {
-        return res.status(401).json({ error: "Password does not match" });
-      }
-      const { id, name } = user;
-      return res.json({
-        id,
-        name,
-        email,
-        token: jwt.sign(
-          {
-            id
-          },
-          "af9b49ece5e5f36085dba3c41d2e7021",
-          { expiresIn: "7d" }
-        )
+    let _user;
+    User.findOne({ where: { email } })
+      .then(user => {
+        _user = user;
+        return user.checkPassword(password);
+      })
+      .catch(err => {
+        return res.status(500).json({ error: err.message });
+      })
+      .then(bool => {
+        if (bool) {
+          return res.json({
+            id: _user.id,
+            name: _user.name,
+            email: _user.email,
+            token: jwt.sign(
+              {
+                id: _user.id
+              },
+              authConfig.secret,
+              { expiresIn: authConfig.expiresIn }
+            )
+          });
+        } else {
+          return res.status(401).json({ error: "Password does not match" });
+        }
+      })
+      .catch(err => {
+        return res.status(500).json({ error: err.message });
       });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: e });
-    }
   }
 }
 
