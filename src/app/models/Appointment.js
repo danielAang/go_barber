@@ -1,11 +1,17 @@
-import { Model } from "sequelize/types";
+import { Sequelize, Model } from "sequelize";
 
 class Appointment extends Model {
   static init(sequelize) {
-    super.init({
-      date: Sequelize.DATE,
-      cancelled_at: Sequelize.DATE
-    });
+    super.init(
+      {
+        date: Sequelize.DATE,
+        cancelled_at: Sequelize.DATE
+      },
+      {
+        tableName: "appointments",
+        sequelize
+      }
+    );
     return this;
   }
 
