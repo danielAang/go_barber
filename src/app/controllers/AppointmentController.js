@@ -1,9 +1,11 @@
 import Appointment from "../models/Appointment";
+import Notification from "../schemas/Notification";
 import * as Yup from "yup";
 import User from "../models/User";
 import File from "../models/File";
-import { startOfHour, parseISO, isBefore } from "date-fns";
-
+import { startOfHour, parseISO, isBefore, format, subHours } from "date-fns";
+import enUS from "date-fns/locale/en-US";
+import Mail from "../../lib/Mail";
 class AppointmentController {
   async index(req, res) {
     const { page = 1 } = req.query;
@@ -76,11 +78,68 @@ class AppointmentController {
       return res.status(400).json({ error: "Appointment date is available" });
     }
 
+    /**
+     * Notificate appointment provider
+     */
+    const user = await User.findByPk(req.userId);
+    const formattedDate = format(hourStart, "MMMM dd, yyyy 'at' HH:mm aa", {
+      locale: enUS
+    });
+
+    await Notification.create({
+      content: `New appointment from ${user.name} to ${formattedDate}`,
+      user: provider_id
+    });
+
     const appointment = await Appointment.create({
       user_id: req.userId,
       provider_id,
       date
     });
+
+    return res.json(appointment);
+  }
+
+  async delete(req, res) {
+    console.log("ID: " + req.params.id);
+    const appointment = await Appointment.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: "provider",
+          attributes: ["name", "email"]
+        }
+      ]
+    });
+    if (!appointment) {
+      res.status(404).json({ error: "Appointment not found" });
+    }
+
+    if (appointment.user_id !== req.userId) {
+      res.status(401).json({
+        error: "You don't have permission to cancel this appointment"
+      });
+    }
+
+    const dateWithSub = subHours(appointment.date, 2);
+    if (isBefore(dateWithSub, new Date())) {
+      return res
+        .status(401)
+        .json({ error: "You can only cancel appointments 2hrs in advance" });
+    }
+
+    appointment.cancelled_at = new Date();
+    await appointment.save();
+
+    try {
+      await Mail.sendMail({
+        to: `${appointment.provider.name} <${appointment.provider.email}>`,
+        subject: "Appointment cancelled",
+        text: "You have an cancelled appointment"
+      });
+    } catch (err) {
+      console.error("Erro ao enviar email: " + err);
+    }
 
     return res.json(appointment);
   }
