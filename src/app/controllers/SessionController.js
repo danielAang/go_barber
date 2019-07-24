@@ -5,36 +5,27 @@ import authConfig from "../../config/auth";
 class SessionController {
   async store(req, res) {
     const { email, password } = req.body;
-    let _user;
-    User.findOne({ where: { email } })
-      .then(user => {
-        _user = user;
-        return user.checkPassword(password);
-      })
-      .catch(err => {
-        return res.status(500).json({ error: err.message });
-      })
-      .then(bool => {
-        if (bool) {
-          return res.json({
-            id: _user.id,
-            name: _user.name,
-            email: _user.email,
-            token: jwt.sign(
-              {
-                id: _user.id
-              },
-              authConfig.secret,
-              { expiresIn: authConfig.expiresIn }
-            )
-          });
-        } else {
-          return res.status(401).json({ error: "Password does not match" });
-        }
-      })
-      .catch(err => {
-        return res.status(500).json({ error: err.message });
-      });
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+    if (!(await user.checkPassword(password))) {
+      return res.status(401).json({ error: "Password does not match" });
+    }
+
+    return res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      token: jwt.sign(
+        {
+          id: user.id
+        },
+        authConfig.secret,
+        { expiresIn: authConfig.expiresIn }
+      )
+    });
   }
 }
 
