@@ -5,7 +5,8 @@ import User from "../models/User";
 import File from "../models/File";
 import { startOfHour, parseISO, isBefore, format, subHours } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-import Mail from "../../lib/Mail";
+import Queue from "../../lib/Queue";
+import CancellationMail from "../jobs/CancellationMail";
 class AppointmentController {
   async index(req, res) {
     const { page = 1 } = req.query;
@@ -108,6 +109,11 @@ class AppointmentController {
           model: User,
           as: "provider",
           attributes: ["name", "email"]
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["name"]
         }
       ]
     });
@@ -131,15 +137,7 @@ class AppointmentController {
     appointment.cancelled_at = new Date();
     await appointment.save();
 
-    try {
-      await Mail.sendMail({
-        to: `${appointment.provider.name} <${appointment.provider.email}>`,
-        subject: "Appointment cancelled",
-        text: "You have an cancelled appointment"
-      });
-    } catch (err) {
-      console.error("Erro ao enviar email: " + err);
-    }
+    Queue.add(CancellationMail.key, { appointment });
 
     return res.json(appointment);
   }
